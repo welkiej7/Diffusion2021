@@ -1,87 +1,86 @@
-##Core Model
-
 library(tidyverse)
+library(ggplot2)
 library(gridExtra)
 library(grid)
-library(Rmisc)
 
-
-matchmaking_two_value <- function(eta_lt,rho_lt,rho_rt,theta,time,
-                                  target = c("eta_lt","eta_rt","rho_lt","rho_rt")){
+final_matchmaking <- function(eta_l,eta_r,rho_l,rho_r,theta,time,alpha = 1,beta = 1){
   
-  storage_v2 <- matrix(NA_real_, nrow = time, ncol = 4)
+  ##Premable ##
+  
+  storage <- as.data.frame(matrix(NA_real_, nrow = time, ncol = 4))
+  colnames(storage) <- c("Eta_i","Eta_j","Rho_i","Rho_j")
   graphs <- list()
-  storage_v2 <- as.data.frame(storage_v2)
-  colnames(storage_v2) <- c("eta_lt","eta_rt","rho_lt","rho_rt")
-  eta_rt <- 1 - eta_lt - rho_lt - rho_rt
+  
+  
+  ##Matchmaking##
   for (i in 1:time) {
-    storage_v2[i,1] <- eta_lt
-    storage_v2[i,2] <- eta_rt
-    storage_v2[i,3] <- rho_lt
-    storage_v2[i,4] <- rho_rt
+    storage[i,1] <-  eta_l
+    storage[i,2] <-  eta_r
+    storage[i,3] <-  rho_l
+    storage[i,4] <-  rho_r
     
+  
     
-    eta_lt_next <- (2*eta_rt*rho_lt) - (2*eta_lt*rho_rt) + 
-      (2*theta*eta_lt*eta_rt) - (2*(1-theta)*eta_rt*eta_lt) + 
-      eta_lt^2
-    eta_rt_next <- 1 - eta_lt_next - rho_lt - rho_rt
+    eta_l_next <-  2*(eta_r*rho_l*eta_r)*alpha - 2*(eta_r*rho_l*eta_r)*(1-alpha) - 
+      2*(eta_l*rho_r*eta_l)*beta + 2*(eta_l*rho_r*eta_l)*(1-beta)+
+      (eta_l*eta_r*eta_r)*theta - (1-theta)*(eta_l*eta_r*eta_l) + eta_l
     
-    if(eta_lt_next == eta_lt){
-     paste("Reached Steady State at Cycle No: ", i) -> Steady_State_Cycle
-      break
-    } else{
-      Steady_State_Cycle <- paste("Unstable")
-    if(eta_lt_next <= 0) {
-      eta_lt <- 0
-      eta_rt <- 1 - (eta_lt + rho_lt + rho_rt)
+    eta_r_next <-  1 - (eta_l_next + rho_l + rho_r)
+    
+    if(eta_l_next <= 0){
+      eta_l_next <- 0
+      eta_r_next <- 1 - (eta_l_next - rho_l - rho_r )
+    } else if(eta_r_next <= 0){
+      eta_r_next  <- 0
+      eta_l_next <-  1 -(eta_r_next + rho_l + rho_r)
     } else {
-      eta_lt <- eta_lt_next
-      eta_rt <- eta_rt_next
+      eta_r_next <- eta_r_next
+      eta_l_next <- eta_l_next
     }
-  }
-}
-  plot <- storage_v2%>%ggplot(mapping = aes(x = 1:time)) + 
-    geom_line(aes(y = eta_lt, color = "Eta_L")) + 
-    geom_line(aes(y = eta_rt, color = "Eta_R")) + 
-    geom_line(aes(y = rho_lt, color = "Rho_L")) + 
-    geom_line(aes(y = rho_rt, color = "Rho_R")) + 
+
     
-    ggtitle("Population", subtitle = paste("Theta:", theta,", ", Steady_State_Cycle)) + 
+    eta_l <- eta_l_next
+    eta_r <- 1 - (eta_l + rho_l + rho_r)
+
+  }
+  ##Output##
+  
+  print(storage)
+  
+  plot <- storage%>%ggplot(mapping = aes(x = 1:time)) + 
+    geom_line(aes(y = Eta_i, color = "Eta_i")) + 
+    geom_line(aes(y = Eta_j, color = "Eta_j")) + 
+    geom_line(aes(y = Rho_i, color = "Rho_i")) + 
+    geom_line(aes(y = Rho_j, color = "Rho_j")) + 
+    
+    ggtitle("Population", subtitle = paste("Theta: ", theta)) + 
     ylab("Proportions") + xlab("Time") + 
     scale_color_manual(name = "Agent Types", 
-                       breaks = c("Eta_L","Eta_R","Rho_L","Rho_R"), 
-                       values = c("Eta_L" = "khaki4","Eta_R" = "salmon3", 
-                                  "Rho_L" = "darkslateblue", "Rho_R" = "tomato4")) + 
-    theme_minimal()
-  
-  list(data = storage_v2, plot = plot)
-  
+                       breaks = c("Eta_i","Eta_j","Rho_i","Rho_j"), 
+                       values = c("Eta_i" = "khaki4","Eta_j" = "salmon3", 
+                                  "Rho_i" = "darkslateblue", "Rho_j" = "tomato4")) + 
+    theme_minimal() +scale_y_continuous(limits = c(0,1)) + 
+    theme(axis.text.x = element_text(size = 15), 
+          axis.text.y = element_text(size = 15),
+          legend.text = element_text(size = 15),
+          axis.title =  element_text(size = 15))
+  list(data = storage, plot = plot)
+
 }
-
-matchmaking_two_value(eta_lt = 0.6, rho_lt = 0.40,rho_rt = 0.10, theta = 1, time = 40 )
-
-## Function for checking if there is a solution for eta_l given rho_l, rho_r
+final_matchmaking(eta_l = 0.40, eta_r = 0.10, rho_l = 0.5, rho_r = 0, theta = 0.5, time = 20)
 
 
 
+results <- lapply(seq(0, 0.5, 0.1), function(i){
+  final_matchmaking(eta_l = i, eta_r = 0.5-i,
+                        rho_l = 0.25,rho_r = 0.25,
+                        theta= 0.2, time = 100)})
+
+
+allplots <- lapply(results, function(x)x$plot)
+gridExtra::grid.arrange(grobs = allplots, ncol = 2)
 
 
 
-solution <-  function(eta_l,rho_l,rho_r,theta){
-  delta <- (-1-(2*rho_r) + 4*theta*(1- eta_l -rho_l -rho_r) - 
-              (2*(1 - eta_l -rho_l -rho_r)^2))- 
-    4 * (2 * (1 - eta_l - rho_l - rho_r)*rho_l)
-  
-  if(delta >= 0){
-    a <- paste("There exists a solution or solutions: ")
-  } else {
-    a <- paste("There is no solution")
-  }
-  print(a)
-}
 
-for(i in seq(0,1,0.1)){
-  solution(eta_l = i, rho_r = 0.1, rho_l = 0.1, theta = 1)
-  
-}
 
